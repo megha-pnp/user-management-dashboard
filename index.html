@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Management Dashboard</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 20px;
+        }
+
+        .user-card {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        #status {
+            color: blue;
+            font-weight: bold;
+            min-height: 20px;
+            margin-bottom: 10px;
+        }
+
+        button {
+            margin: 5px 5px 5px 0;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        .error {
+            color: #c62828;
+        }
+
+        .success {
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>User Management Dashboard</h1>
+
+    <div id="status" role="status" aria-live="polite"></div>
+
+    <button id="btn-create" type="button">
+        Add New User (POST)
+    </button>
+
+    <div id="user-list"></div>
+
+    <script>
+        const API_URL = 'https://jsonplaceholder.typicode.com/users';
+
+        const userListDiv = document.getElementById('user-list');
+        const statusDiv = document.getElementById('status');
+        const createButton = document.getElementById('btn-create');
+
+        // Keep a local copy because JSONPlaceholder does not permanently
+        // save POST, PUT, or DELETE changes.
+        let users = [];
+
+        function setStatus(message, type = '') {
+            statusDiv.textContent = message;
+            statusDiv.className = type;
+        }
+
+        function createUserCard(user, index) {
+            const card = document.createElement('div');
+            card.className = 'user-card';
+            card.dataset.userId = user.id;
+
+            const name = document.createElement('h3');
+            name.textContent = user.name;
+
+            const email = document.createElement('p');
+            email.textContent = `Email: ${user.email}`;
+            email.className = 'user-email';
+
+            card.append(name, email);
+
+            // Update Email beside the first user only.
+            if (index === 0) {
+                const updateButton = document.createElement('button');
+                updateButton.type = 'button';
+                updateButton.textContent = 'Update Email';
+                updateButton.addEventListener('click', () => updateUserEmail(user.id));
+                card.appendChild(updateButton);
+            }
+
+            const deleteButton = document.createElement('button');
+            deleteButton.type = 'button';
+            deleteButton.textContent = 'Delete';
+            deleteButton.addEventListener('click', () => deleteUser(user.id));
+            card.appendChild(deleteButton);
+
+            return card;
+        }
+
+        function renderUsers() {
+            userListDiv.replaceChildren();
+
+            users.forEach((user, index) => {
+                userListDiv.appendChild(createUserCard(user, index));
+            });
+        }
+
+        // TASK 1: GET USERS
+        async function loadUsers() {
+            setStatus('Loading...');
+
+            try {
+                const response = await fetch(API_URL);
+
+                if (!response.ok) {
+                    throw new Error(`Could not load users. HTTP status: ${response.status}`);
+                }
+
+                users = await response.json();
+                renderUsers();
+                setStatus('');
+            } catch (error) {
+                console.error('GET error:', error);
+                setStatus(`Error loading users: ${error.message}`, 'error');
+            } finally {
+                // Clear loading text even if the request fails.
+                if (statusDiv.textContent === 'Loading...') {
+                    setStatus('');
+                }
+            }
+        }
+
+        // TASK 2: CREATE USER
+        createButton.addEventListener('click', async () => {
+            setStatus('Loading...');
+
+            const newUser = {
+                name: 'John Doe',
+                email: 'john@example.com'
+            };
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(newUser)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Could not create user. HTTP status: ${response.status}`);
+                }
+
+                const createdUser = await response.json();
+
+                // JSONPlaceholder returns a simulated new ID (usually 11).
+                users.push(createdUser);
+                renderUsers();
+                setStatus('User added successfully.', 'success');
+            } catch (error) {
+                console.error('POST error:', error);
+                setStatus(`Error adding user: ${error.message}`, 'error');
+            } finally {
+                // Keep success/error feedback; only remove a leftover loading message.
+                if (statusDiv.textContent === 'Loading...') {
+                    setStatus('');
+                }
+            }
+        });
+
+        // TASK 3: UPDATE USER EMAIL
+        async function updateUserEmail(userId) {
+            setStatus('Loading...');
+
+            try {
+                const selectedUser = users.find(user => user.id === userId);
+
+                if (!selectedUser) {
+                    throw new Error('User not found.');
+                }
+
+                const updatedUser = {
+                    ...selectedUser,
+                    email: 'updated@example.com'
+                };
+
+                const response = await fetch(`${API_URL}/${userId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updatedUser)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Could not update user. HTTP status: ${response.status}`);
+                }
+
+                const responseUser = await response.json();
+
+                users = users.map(user =>
+                    user.id === userId
+                        ? { ...user, ...responseUser, email: 'updated@example.com' }
+                        : user
+                );
+
+                renderUsers();
+                setStatus('User email updated successfully.', 'success');
+            } catch (error) {
+                console.error('PUT error:', error);
+                setStatus(`Error updating email: ${error.message}`, 'error');
+            } finally {
+                if (statusDiv.textContent === 'Loading...') {
+                    setStatus('');
+                }
+            }
+        }
+
+        // TASK 4: DELETE USER
+        async function deleteUser(userId) {
+            setStatus('Loading...');
+
+            try {
+                const response = await fetch(`${API_URL}/${userId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Could not delete user. HTTP status: ${response.status}`);
+                }
+
+                users = users.filter(user => user.id !== userId);
+                renderUsers();
+                setStatus('User deleted successfully.', 'success');
+            } catch (error) {
+                console.error('DELETE error:', error);
+                setStatus(`Error deleting user: ${error.message}`, 'error');
+            } finally {
+                if (statusDiv.textContent === 'Loading...') {
+                    setStatus('');
+                }
+            }
+        }
+
+        // Load users when the page opens.
+        loadUsers();
+    </script>
+
+</body>
+</html>
